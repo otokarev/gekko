@@ -256,14 +256,15 @@ Manager.prototype.noteOrder = function(err, order) {
   this.orders.push(order);
   // if after 1 minute the order is still there
   // we cancel and calculate & make a new one
-  setTimeout(this.checkOrder, util.minToMs(1));
+  setTimeout(() => this.checkOrder(order), util.minToMs(1));
 };
 
 
 Manager.prototype.cancelLastOrder = function(done) {
   this.exchange.cancelOrder(_.last(this.orders), alreadyFilled => {
-    if(alreadyFilled)
-      return this.relayOrder(done);
+    if(alreadyFilled) {
+        return this.relayOrder(_.last(this.orders), done);
+    }
 
     this.orders = [];
     done();
@@ -272,21 +273,18 @@ Manager.prototype.cancelLastOrder = function(done) {
 
 // check whether the order got fully filled
 // if it is not: cancel & instantiate a new order
-Manager.prototype.checkOrder = function() {
-  var handleCheckResult = function(err, filled) {
+Manager.prototype.checkOrder = function(order) {
+  var handleCheckResult = (err, filled) => {
     if(!filled) {
       log.info(this.action, 'order was not (fully) filled, cancelling and creating new order');
-      this.exchange.cancelOrder(_.last(this.orders), _.bind(handleCancelResult, this));
-
-      return;
+      this.exchange.cancelOrder(order, _.bind(handleCancelResult, this));
+    } else {
+        this.relayOrder(order);
     }
-
-    log.info(this.action, 'was successfull');
-
-    this.relayOrder();
   }
 
   var handleCancelResult = function(alreadyFilled) {
+    this.relayOrder(order);
     if(alreadyFilled)
       return;
 
@@ -305,7 +303,7 @@ Manager.prototype.checkOrder = function() {
     this.trade(this.action, true);
   }
 
-  this.exchange.checkOrder(_.last(this.orders), _.bind(handleCheckResult, this));
+  this.exchange.checkOrder(order, _.bind(handleCheckResult, this));
 }
 
 // convert into the portfolio expected by the performanceAnalyzer
@@ -320,7 +318,7 @@ Manager.prototype.convertPortfolio = function(portfolio) {
   }
 }
 
-Manager.prototype.relayOrder = function(done) {
+Manager.prototype.relayOrder = function(order, done) {
   // look up all executed orders and relay average.
   var relay = (err, res) => {
 
@@ -353,7 +351,7 @@ Manager.prototype.relayOrder = function(done) {
         action: this.action.toLowerCase()
       });
 
-      this.orders = [];
+      this.orders = this.orders.filter(o => parseInt(o) !== parseInt(order));
 
       if(_.isFunction(done))
         done();
@@ -362,7 +360,7 @@ Manager.prototype.relayOrder = function(done) {
   }
 
   var getOrders = _.map(
-    this.orders,
+    [order],
     order => next => this.exchange.getOrder(order, next)
   );
 

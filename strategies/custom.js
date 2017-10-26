@@ -26,7 +26,7 @@ strat.update = function(candle) {
   this.randomNumber = Math.random();
 
   // There is a 10% chance it is smaller than 0.1
-  this.toUpdate = this.randomNumber < 0.1;
+  this.toUpdate = this.randomNumber < 0.5;
 }
 
 // For debugging purposes.
